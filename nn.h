@@ -7,8 +7,11 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
+#define PRINT_T(m) print_tensor(m, #m)
 #define VALUE_AT(t, i, j) (t).es[(i) * (t).cols + (j)]
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
 typedef struct {
   /*define a matrix
@@ -19,26 +22,35 @@ typedef struct {
   float *es; // pointer to the memory that hold the float(values)
 } Tensor;
 
-typedef Tensor (*ActivationFunction)(Tensor);
+typedef void (*ActivationFunction)(Tensor);
+
+typedef struct {
+  size_t net_size;
+  Tensor* weights; // array of weights for the network
+  Tensor* biases; // array of biases for the network
+  Tensor* activations; // outputs from each layer
+  ActivationFunction* activation_funs;
+}Net;
 
 float float_rand(void);
 float _sigmoid(float);
 
 Tensor new_tensor(size_t, size_t);
 // Tensor initializations
-void rand_tensor(Tensor, int, int);
-void zeros_tensor(Tensor);
-void ones_tensor(Tensor);
-void set_tensor(Tensor, int rows,int cols,float (*)[cols]);
+void rand_tensor(Tensor src, int min, int max);
+void zeros_tensor(Tensor src);
+void ones_tensor(Tensor src);
+void set_tensor(Tensor src, int rows,int cols,float (*)[cols]);
 // Tensor operation
-Tensor matmul(Tensor, Tensor);
-Tensor matadd(Tensor, Tensor);
-Tensor sigmoid(Tensor);
-Tensor relu(Tensor);
+void matmul(Tensor dst,Tensor a, Tensor b);
+void matadd(Tensor dst, Tensor src);
+void sigmoid(Tensor src);
+void relu(Tensor src);
 // Basic nn
-Tensor *linear_layer(int, int, int, int *);
-Tensor feed_forward(int, Tensor, Tensor *, ActivationFunction *);
-void print_tensor(Tensor, char *);
+Net fully_connected_layer(size_t* l_sizes, size_t count, ActivationFunction* layer_activations);
+void _forward(Net nn);
+void print_tensor(Tensor t, char* name);
+void print_network(Net nn, char* name);
 
 #endif // NN_H_
 
@@ -91,7 +103,7 @@ void set_tensor(Tensor m,int rows, int cols,float (*values)[cols]){
   }
 }
 
-Tensor matmul(Tensor a, Tensor b) {
+void matmul(Tensor dst,Tensor a, Tensor b) {
   /* Tensor multiplication between to matrices
    * Args:
    *  a(Tensor): firs matrice
@@ -101,10 +113,6 @@ Tensor matmul(Tensor a, Tensor b) {
    *  Tensor
    * */
   assert(a.cols == b.rows);
-  // if compatible create a new matrice with
-  // shape a.rows x b.cols
-  Tensor dst = new_tensor(a.rows, b.cols);
-
   // multiply ith row of matrice a with jth col of matrice b
   for (size_t i = 0; i < a.rows; ++i) {
     for (size_t j = 0; j < b.cols; ++j) {
@@ -114,95 +122,84 @@ Tensor matmul(Tensor a, Tensor b) {
       }
     }
   }
-  return dst;
 }
 
-Tensor matadd(Tensor a, Tensor b) {
+void matadd(Tensor dst, Tensor src) {
   /* Elementwise summation of two matrices
    * matrices should have the same dimension
    * Args:
    *  dst(Tensor): destination matrice
    *  src(Tensor): source matrice
    * */
-  assert(a.rows == b.rows);
-  assert(a.cols == b.cols);
-
-  Tensor dst = new_tensor(a.rows, b.cols);
+  assert(dst.rows == src.rows);
+  assert(dst.cols == src.cols);
 
   for (size_t i = 0; i < dst.rows; ++i) {
     for (size_t j = 0; j < dst.cols; ++j) {
-      VALUE_AT(dst, i, j) = VALUE_AT(a, i, j) + VALUE_AT(b, i, j);
+      VALUE_AT(dst, i, j) += VALUE_AT(src, i, j);
     }
   }
-  return dst;
 }
 
 /*Operations*/
 
 float _sigmoid(float x) { return 1 / (1 + expf(-x)); }
 
-Tensor sigmoid(Tensor x) {
-  Tensor dst = new_tensor(x.rows, x.cols);
-
-  for (size_t i = 0; i < x.rows; ++i) {
-    for (size_t j = 0; j < x.cols; ++j) {
-      VALUE_AT(dst, i, j) = _sigmoid(VALUE_AT(x, i, j));
+void sigmoid(Tensor src) {
+  for (size_t i = 0; i < src.rows; ++i) {
+    for (size_t j = 0; j < src.cols; ++j) {
+      VALUE_AT(src, i, j) = _sigmoid(VALUE_AT(src, i, j));
     }
   }
-  return dst;
 }
 
-Tensor relu(Tensor x) {
-  Tensor dst = new_tensor(x.rows, x.cols);
-  for (size_t i = 0; i < x.rows; ++i) {
-    for (size_t j = 0; j < x.cols; ++j) {
-      VALUE_AT(dst, i, j) = fmaxf(0, VALUE_AT(x, i, j));
+void relu(Tensor src) {
+  for (size_t i = 0; i < src.rows; ++i) {
+    for (size_t j = 0; j < src.cols; ++j) {
+      VALUE_AT(src, i, j) = fmaxf(0, VALUE_AT(src, i, j));
     }
   }
-  return dst;
 }
 
-Tensor *linear_layer(int input_size, int output_size, int num_h_layers,
-                     int *h_layer_sizes) {
-  // The input is assumed to be a column vector (1, input_size)
-  //  weights (input_size,output_size)
+Net fully_connected_layer(size_t* l_sizes, size_t count, ActivationFunction* layer_activations){
+  size_t hidden_layer_count = count - 1;
+  // initialize
+  Net nn = {
+    .net_size = hidden_layer_count,
+    .weights = calloc(hidden_layer_count,sizeof(Tensor)),
+    .biases = calloc(hidden_layer_count,sizeof(Tensor)),
+    .activations = calloc(count,sizeof(Tensor)),
+    .activation_funs = layer_activations
+  };
+  /*initialize each tensors in weights & biases*/
+  // initialize the input activation, it will have a row 1, and col of l_sizes[0]
+  nn.activations[0] = new_tensor(1,l_sizes[0]);
+  // initialize weights
+  for(size_t i = 0; i < hidden_layer_count; ++i){
+    // weights
+    nn.weights[i] = new_tensor(nn.activations[i].cols,l_sizes[i + 1]);
+    // randomize
+    rand_tensor(nn.weights[i],-1,1);
+    // biases
+    nn.biases[i] = new_tensor(1,l_sizes[i + 1]);
+    rand_tensor(nn.biases[i],-1,1);
+    // next_activation
+    nn.activations[i+1] = new_tensor(1,l_sizes[i + 1]);
 
-  //  input dot weights
-  Tensor *weights =
-      calloc(num_h_layers + 1, sizeof(Tensor)); // one for output layer
-  int rows = input_size;
-  int cols = *h_layer_sizes;
-
-  Tensor in_weight = new_tensor(rows, cols);
-  rand_tensor(in_weight, -1, 1);
-
-  weights[0] = in_weight;
-  // hidden layers
-  for (int i = 1; i <= num_h_layers - 1; ++i) {
-    Tensor h_weight = new_tensor(cols, h_layer_sizes[i]);
-    rand_tensor(h_weight, -1, 1);
-    weights[i] = h_weight;
-    cols = h_layer_sizes[i];
   }
-  // output layer
-  Tensor out_weight = new_tensor(cols, output_size);
-  rand_tensor(out_weight, -1, 1);
-  weights[num_h_layers] = out_weight;
 
-  return weights;
+  return nn;
 }
 
-Tensor feed_forward(int layer_size, Tensor input, Tensor *weights,
-                    ActivationFunction *activations) {
+void _forward(Net nn){
   // Perform matmul between input and weight
   // add bies (ignored for simplicity)
   // activation function
-  Tensor logits = activations[0](matmul(input, *weights));
-
-  for (int i = 1; i < layer_size; ++i) {
-    logits = activations[i](matmul(logits, weights[i]));
+ for (size_t i = 0; i < nn.net_size; ++i) {
+    matmul(nn.activations[i + 1],nn.activations[i],nn.weights[i]);
+    matadd(nn.activations[i + 1],nn.biases[i]);
+    nn.activation_funs[i](nn.activations[i + 1]);
   }
-  return logits;
 }
 
 void print_tensor(Tensor m, char *name) {
@@ -216,5 +213,21 @@ void print_tensor(Tensor m, char *name) {
   }
   printf("]\n");
   return;
+}
+
+void print_network(Net nn, char* name){
+  printf("Network Summary for network %s.... \n", name);
+  char buf[256];
+  print_tensor(nn.activations[0],"Input");
+  for(size_t i = 0; i < nn.net_size; ++i){
+    sprintf(buf,"W%lu",i);
+    print_tensor(nn.weights[i],buf);
+
+    sprintf(buf,"B%lu",i);
+    print_tensor(nn.biases[i],buf);
+
+    sprintf(buf,"A%lu",i+1);
+    print_tensor(nn.activations[i+1],buf);
+  }
 }
 #endif // NN_IMPLEMENTATION
