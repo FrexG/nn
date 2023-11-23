@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
 #define PRINT_T(m) print_tensor(m, #m)
 #define VALUE_AT(t, i, j) (t).es[(i) * (t).cols + (j)]
@@ -34,13 +35,14 @@ typedef struct {
 
 float float_rand(void);
 float _sigmoid(float);
+float mse(float y_true, float y_pred);
 
 Tensor new_tensor(size_t, size_t);
 // Tensor initializations
 void rand_tensor(Tensor src, int min, int max);
 void zeros_tensor(Tensor src);
 void ones_tensor(Tensor src);
-void set_tensor(Tensor src, int rows,int cols,float (*)[cols]);
+void set_tensor(Tensor src, int rows,int cols,float *val);
 // Tensor operation
 void matmul(Tensor dst,Tensor a, Tensor b);
 void matadd(Tensor dst, Tensor src);
@@ -48,9 +50,12 @@ void sigmoid(Tensor src);
 void relu(Tensor src);
 // Basic nn
 Net fully_connected_layer(size_t* l_sizes, size_t count, ActivationFunction* layer_activations);
-void _forward(Net nn);
+
+void _forward(Net nn, Tensor input);
 void print_tensor(Tensor t, char* name);
 void print_network(Net nn, char* name);
+
+void free_neural_net(Net);
 
 #endif // NN_H_
 
@@ -95,12 +100,9 @@ void ones_tensor(Tensor m) {
   return;
 }
 
-void set_tensor(Tensor m,int rows, int cols,float (*values)[cols]){
-  for(int i = 0; i < rows; ++i){
-    for(int j = 0; j < cols; j++){
-      VALUE_AT(m,i,j) = values[i][j];
-    }
-  }
+void set_tensor(Tensor m,int rows, int cols,float* val){
+  // set the value 
+   memcpy(m.es,val,rows*cols*sizeof(val));
 }
 
 void matmul(Tensor dst,Tensor a, Tensor b) {
@@ -191,15 +193,34 @@ Net fully_connected_layer(size_t* l_sizes, size_t count, ActivationFunction* lay
   return nn;
 }
 
-void _forward(Net nn){
+void free_neural_net(Net nn){
+  for(size_t i = 0; i < nn.net_size; ++i){
+    free(nn.weights[i].es);
+    free(nn.biases[i].es);
+    free(nn.activations[i].es);
+  }
+  free(nn.weights);
+  free(nn.biases);
+  free(nn.activations);
+}
+
+void _forward(Net nn, Tensor input){
   // Perform matmul between input and weight
-  // add bies (ignored for simplicity)
+  // add bias 
   // activation function
+  // set the initial activation to the value fo the input tenosr
+  // free already alocated tensor memory
+  free(nn.activations[0].es);
+  nn.activations[0] = input;
  for (size_t i = 0; i < nn.net_size; ++i) {
     matmul(nn.activations[i + 1],nn.activations[i],nn.weights[i]);
     matadd(nn.activations[i + 1],nn.biases[i]);
     nn.activation_funs[i](nn.activations[i + 1]);
   }
+}
+
+float mse(float y_true,float y_pred){
+ return pow((y_true - y_pred),2);
 }
 
 void print_tensor(Tensor m, char *name) {
