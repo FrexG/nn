@@ -42,20 +42,25 @@ Tensor new_tensor(size_t, size_t);
 void rand_tensor(Tensor src, int min, int max);
 void zeros_tensor(Tensor src);
 void ones_tensor(Tensor src);
-void set_tensor(Tensor src, int rows,int cols,float *val);
+void set_tensor(Tensor src, int rows,int cols,float (*val)[cols]);
 // Tensor operation
 void matmul(Tensor dst,Tensor a, Tensor b);
 void matadd(Tensor dst, Tensor src);
 void sigmoid(Tensor src);
 void relu(Tensor src);
+// derivatives of activation function
+void d_sigmoid(Tensor src);
+void d_relu(Tensor src);
 // Basic nn
 Net fully_connected_layer(size_t* l_sizes, size_t count, ActivationFunction* layer_activations);
 
-void _forward(Net nn, Tensor input);
+Tensor _forward(Net nn, Tensor input);
+void _backward(Net nn, float cost);
+
 void print_tensor(Tensor t, char* name);
 void print_network(Net nn, char* name);
 
-void free_neural_net(Net);
+void free_neural_net(Net*);
 
 #endif // NN_H_
 
@@ -100,9 +105,24 @@ void ones_tensor(Tensor m) {
   return;
 }
 
-void set_tensor(Tensor m,int rows, int cols,float* val){
+void set_tensor(Tensor m,int rows, int cols,float (*val)[cols]){
   // set the value 
-   memcpy(m.es,val,rows*cols*sizeof(val));
+  for(size_t i = 0; i < m.rows; ++i){
+    for(size_t j = 0; j < m.cols; ++j){
+      VALUE_AT(m,i,j) = val[i][j];
+    }
+  }
+}
+
+void copy_tensor(Tensor dst,Tensor src){
+  assert(dst.rows == src.rows);
+  assert(dst.clos == src.cols);
+
+  for(size_t i = 0; i < src.rows; ++i){
+    for(size_t j = 0; j < src.cols; ++j){
+      VALUE_AT(dst,i,j) = VALUE_AT(src,i,j); 
+    }
+  }
 }
 
 void matmul(Tensor dst,Tensor a, Tensor b) {
@@ -163,6 +183,24 @@ void relu(Tensor src) {
   }
 }
 
+void d_sigmoid(Tensor src){
+  for(size_t i = 0; i < src.rows; ++i){
+    for(size_t j = 0; j < src.cls; ++j){
+      float val = VALUE_AT(src,i,j);
+      VALUE_AT(src,i,j) = _sigmoid(val) * (1 - _sigmoid(val));
+    }
+  }
+}
+
+void d_relu(Tensor src){
+  for(size_t i = 0; i < src.rows; ++i){
+    for(size_t j = 0; j < src.cls; ++j){
+      float val = VALUE_AT(src,i,j);
+      VALUE_AT(src,i,j) = val >=0 ? 1 : 0;
+    }
+  }
+}
+
 Net fully_connected_layer(size_t* l_sizes, size_t count, ActivationFunction* layer_activations){
   size_t hidden_layer_count = count - 1;
   // initialize
@@ -193,18 +231,19 @@ Net fully_connected_layer(size_t* l_sizes, size_t count, ActivationFunction* lay
   return nn;
 }
 
-void free_neural_net(Net nn){
-  for(size_t i = 0; i < nn.net_size; ++i){
-    free(nn.weights[i].es);
-    free(nn.biases[i].es);
-    free(nn.activations[i].es);
+void free_neural_net(Net* nn){
+  free(nn->activations[0].es);
+  for(size_t i = 0; i < nn->net_size; ++i){
+    free(nn->weights[i].es);
+    free(nn->biases[i].es);
+    free(nn->activations[i+1].es);
   }
-  free(nn.weights);
-  free(nn.biases);
-  free(nn.activations);
+  free(nn->weights);
+  free(nn->biases);
+  free(nn->activations);
 }
 
-void _forward(Net nn, Tensor input){
+Tensor _forward(Net nn, Tensor input){
   // Perform matmul between input and weight
   // add bias 
   // activation function
@@ -217,10 +256,23 @@ void _forward(Net nn, Tensor input){
     matadd(nn.activations[i + 1],nn.biases[i]);
     nn.activation_funs[i](nn.activations[i + 1]);
   }
+  return nn.activations[nn.net_size]; // last activation is output
 }
 
 float mse(float y_true,float y_pred){
  return pow((y_true - y_pred),2);
+}
+
+void _backward(Net nn,float cost){
+  // start from the last layer
+  //  act function of last layer is relu
+  // mse = 1/n * sum((y - yp)^2)
+  // y = sigmoid(last_layer_activations)
+  size_t last_layer_index = nn.net_size - 1;
+  Tensor last_layer_activation = nn.
+  Tensor last_layer_grad = new_tensor()
+
+  
 }
 
 void print_tensor(Tensor m, char *name) {
