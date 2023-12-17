@@ -3,8 +3,11 @@
 ### A Simple Tensor/Neural Network library with autograd (backpropagation) in C
 
 `nn.h` is a lightweight and easy-to-use neural network library designed to provide a PyTorch-like API for training neural networks in C.
-The library focuses on basic array/tensor operations, supporting essential functionalities such as `matrix multiplication`, `addition`, `initialization with ones or zeros`, `hresholding`, and `subtraction`. 
-You can easily define arbitrary-length neural networks using this library.
+The library focuses on basic array/tensor operations, supporting essential functionalities such as `matrix multiplication`, `addition`, `initialization with ones or zeros`, `thresholding`, and `subtraction`. You can easily define arbitrary-length neural networks using this library.
+
+## Reference
+- This repo is heavily inspired by [Tsodings' streams](https://www.youtube.com/watch?v=o7da9anmnMs&list=PLpM-Dvs8t0VZPZKggcql-MmjaBdZKeDMw&index=3).
+- 3blue1brown's [series on neural networks](https://www.youtube.com/watch?v=aircAruvnKk).
 
 ## Features
 
