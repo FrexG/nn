@@ -6,23 +6,78 @@
 #define NUM_INPUTS 2
 #define NUM_OUTPUTS 1
 
-int main(void) {
-  srand(time(0));
+void train(Net neural_net, Tensor x_train, Tensor y_train, size_t epochs, float lr)
+{
+  // train loop
+  for (size_t epoch = 0; epoch < epochs; ++epoch)
+  {
+
+    for (size_t i = 0; i < NUM_SAMPLES; ++i)
+    {
+      Tensor x = new_tensor(1, NUM_INPUTS);
+      Tensor y = new_tensor(1, NUM_OUTPUTS);
+
+      float temp_vals[1][NUM_INPUTS];
+      for (size_t j = 0; j < NUM_INPUTS; ++j)
+      {
+        temp_vals[0][j] = VALUE_AT(x_train, i, j);
+      }
+      set_tensor(x, 1, NUM_INPUTS, temp_vals);
+      VALUE_AT(y, 0, 0) = VALUE_AT(y_train, i, 0);
+
+      _forward(neural_net, x);
+      // backprop
+      _backward(neural_net, y);
+      free(y.es);
+      free(x.es);
+    }
+    _update(neural_net, lr, NUM_SAMPLES);
+    zero_grad(neural_net);
+  }
+}
+void evaluate(Net neural_net, Tensor x_train, Tensor y_train)
+{
+  // evaluation
+  printf("Evaluate...\n");
+  float cost = 0.0;
+  for (size_t i = NUM_SAMPLES; i > 0; --i)
+  {
+    Tensor x = new_tensor(1, NUM_INPUTS);
+    Tensor y = new_tensor(1, NUM_OUTPUTS);
+
+    float temp_vals[1][NUM_INPUTS];
+    for (size_t j = 0; j < NUM_INPUTS; ++j)
+    {
+      temp_vals[0][j] = VALUE_AT(x_train, i - 1, j);
+    }
+    set_tensor(x, 1, NUM_INPUTS, temp_vals);
+    VALUE_AT(y, 0, 0) = VALUE_AT(y_train, i - 1, 0);
+
+    Tensor pred = _forward(neural_net, x);
+     printf("%f ^ %f  = %f\n", *x.es, *(x.es + 1), *pred.es);
+    Tensor cost_t = mse(y, pred);
+    cost += *cost_t.es;
+    free(cost_t.es);
+    free(y.es);
+    free(x.es);
+  }
+  printf("Cost = %f\n", cost / NUM_SAMPLES);
+}
+
+int main(void)
+{
+  // srand(time(0));
+  srand(69);
 
   // Create a neural network
   size_t layer_sizes[] = {2, 2, 1};
   size_t count = ARRAY_SIZE(layer_sizes);
-  ActivationFunction activations[] = {relu, sigmoid};
 
-  // Tensor in = new_tensor(1,*layer_sizes);
-  // rand_tensor(in,-1,1);
+  Activation activations[] = {RELU, SIGMOID};
 
   Net neural_net = fully_connected_layer(layer_sizes, count, activations);
-  print_network(neural_net, "ff");
-
-  printf("Performing forward pass ... \n");
-  // Tensor pred = _forward(neural_net,in);
-  // print_network(neural_net,"ff");
+  printf("Network initial parameters ... \n");
+  // print_network(neural_net, "ff");
 
   /* an Xor dataset */
   float xor_input[NUM_SAMPLES][NUM_INPUTS] = {{0, 0}, {0, 1}, {1, 0}, {1, 1}};
@@ -37,32 +92,11 @@ int main(void) {
   PRINT_T(xor_input_tensor);
   PRINT_T(xor_output_tensor);
 
-  // train loop
-  for (size_t epoch = 1; epoch < 10; ++epoch) {
-    printf("Epoch %lu\n", epoch);
+  // start training
+  train(neural_net, xor_input_tensor, xor_output_tensor, 100 * 1000, 0.1);
+  // evaluat
+  evaluate(neural_net, xor_input_tensor, xor_output_tensor);
 
-    float cost = 0.0;
-
-    for (size_t i = 0; i < NUM_SAMPLES; ++i) {
-      Tensor x = new_tensor(1, NUM_INPUTS);
-      Tensor y = new_tensor(1, NUM_OUTPUTS);
-
-      float temp_vals[1][NUM_INPUTS];
-      for (size_t j = 0; j < NUM_INPUTS; ++j) {
-        temp_vals[0][j] = VALUE_AT(xor_input_tensor, i, j);
-      }
-      set_tensor(x, 1, NUM_INPUTS, temp_vals);
-      VALUE_AT(y, 0, 0) = VALUE_AT(xor_output_tensor, i, 0);
-      Tensor pred = _forward(neural_net, x);
-
-      Tensor cost_t = mse(y, pred);
-      cost += *cost_t.es;
-      // backprop
-      _backward(neural_net, cost_t);
-      free(cost_t.es);
-      free(y.es);
-    }
-  }
   free_neural_net(&neural_net);
   free(xor_input_tensor.es);
   free(xor_output_tensor.es);
