@@ -29,7 +29,8 @@ typedef struct
 typedef enum
 {
   SIGMOID,
-  RELU
+  RELU,
+  NONE,
 } Activation;
 
 typedef struct
@@ -56,6 +57,9 @@ void zeros_tensor(Tensor src);
 void ones_tensor(Tensor src);
 void set_tensor(Tensor src, int rows, int cols, float (*val)[cols]);
 void copy_tensor(Tensor dst, Tensor src);
+void normalize_tensor(Tensor tensor);
+Tensor get_row(Tensor src, size_t row, size_t cols);
+Tensor *get_batch(Tensor x, Tensor y, size_t idx,size_t n_inputs, size_t n_outputs, size_t batch_size);
 // Tensor operation
 void matmul(Tensor dst, Tensor a, Tensor b);
 void matadd(Tensor dst, Tensor src);
@@ -70,7 +74,7 @@ Net fully_connected_layer(size_t *l_sizes, size_t count,
                           Activation *layer_activations);
 
 Tensor _forward(Net nn, Tensor input);
-void _backward(Net nn, Tensor cost);
+void _backward(Net nn, Tensor target, Tensor pred);
 void _update(Net nn, float lr, size_t batch);
 void normalize(Tensor grad, size_t batch);
 void grad_diff(Tensor param, Tensor grad, float lr);
@@ -154,6 +158,70 @@ void copy_tensor(Tensor dst, Tensor src)
     }
   }
 }
+
+Tensor get_row(Tensor src, size_t row, size_t cols)
+{
+  assert(row < src.rows);
+  Tensor ROW = new_tensor(1, cols);
+  for (size_t i = 0; i < cols; ++i)
+  {
+    VALUE_AT(ROW, 0, i) = VALUE_AT(src, row, i);
+  }
+
+  return ROW;
+}
+
+Tensor* get_batch(Tensor x, Tensor y, size_t idx,size_t n_inputs, size_t n_outputs, size_t batch_size)
+{
+  assert(x.rows == y.rows);
+  static size_t index = 0; 
+  // assert if x.rows == y.rows
+  Tensor x_batch = new_tensor(batch_size, x.cols);
+  Tensor y_batch = new_tensor(batch_size, y.cols);
+  for (size_t i = 0; i < batch_size; ++i)
+  {
+    for (size_t j = 0; j < n_inputs; ++j)
+    {
+      VALUE_AT(x_batch, i, j) = VALUE_AT(x, i + index + idx, j);
+    }
+    for (size_t k = 0; k < n_outputs; ++k)
+    {
+      VALUE_AT(y_batch, i, k) = VALUE_AT(y, i + index + idx, k);
+    }
+  }
+  index += batch_size;
+  // reset when at the end
+  if (index  + idx >= x.rows)
+    index = 0;
+
+  Tensor batch_tensor[] = {x_batch, y_batch};
+
+  return batch_tensor;
+}
+
+void normalize_tensor(Tensor tensor)
+{
+  float max_value = 1e-6; // Initialize to minimum float value
+
+  // Find the maximum value in the array
+  for (size_t i = 0; i < tensor.rows; ++i)
+  {
+    for (size_t j = 0; j < tensor.cols; ++j)
+    {
+      if (VALUE_AT(tensor, i, j) > max_value)
+        max_value = VALUE_AT(tensor, i, j);
+    }
+  }
+  // Normalize each element
+  for (size_t i = 0; i < tensor.rows; ++i)
+  {
+    for (size_t j = 0; j < tensor.cols; ++j)
+    {
+      VALUE_AT(tensor, i, j) /= max_value;
+    }
+  }
+}
+
 void matmul(Tensor dst, Tensor a, Tensor b)
 {
   /* Tensor multiplication between to matrices
@@ -228,6 +296,8 @@ float activate(float val, Activation activation_type)
     break;
   case RELU:
     return _relu(val);
+  case NONE:
+    return val;
     break;
   }
 }
@@ -241,6 +311,8 @@ float d_act_fun(float val, Activation act_fun)
   case RELU:
     return val >= 0 ? 1 : RELU_PARAM;
     break;
+  case NONE:
+    return 1.0f;
   }
   return 0;
 }
@@ -346,7 +418,7 @@ Tensor _forward(Net nn, Tensor input)
   }
   return nn.activations[nn.net_size]; // last activation is output
 }
-void _backward(Net nn, Tensor target)
+void _backward(Net nn, Tensor target,Tensor pred)
 {
 
   for (size_t l = 0; l <= nn.net_size; ++l)
@@ -356,7 +428,8 @@ void _backward(Net nn, Tensor target)
 
   for (size_t j = 0; j < target.cols; ++j)
   {
-    VALUE_AT(nn.grad_activations[nn.net_size], 0, j) = 2 * (VALUE_AT(nn.activations[nn.net_size], 0, j) - VALUE_AT(target, 0, j));
+    //VALUE_AT(nn.grad_activations[nn.net_size], 0, j) = 2 * (VALUE_AT(nn.activations[nn.net_size], 0, j) - VALUE_AT(target, 0, j));
+    VALUE_AT(nn.grad_activations[nn.net_size], 0, j) = 2 * (VALUE_AT(pred,0,j) - VALUE_AT(target, 0, j));
   }
   for (size_t l = nn.net_size; l > 0; --l)
   {

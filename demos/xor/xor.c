@@ -1,7 +1,7 @@
 #include <time.h>
 #define NN_IMPLEMENTATION
-#include "nn.h"
 
+#include "../../nn.h"
 #define NUM_SAMPLES 4
 #define NUM_INPUTS 2
 #define NUM_OUTPUTS 1
@@ -54,7 +54,7 @@ void evaluate(Net neural_net, Tensor x_train, Tensor y_train)
     VALUE_AT(y, 0, 0) = VALUE_AT(y_train, i - 1, 0);
 
     Tensor pred = _forward(neural_net, x);
-     printf("%f ^ %f  = %f\n", *x.es, *(x.es + 1), *pred.es);
+    printf("%f ^ %f  = %f\n", *x.es, *(x.es + 1), *pred.es);
     Tensor cost_t = mse(y, pred);
     cost += *cost_t.es;
     free(cost_t.es);

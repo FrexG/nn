@@ -1,9 +1,9 @@
 CC := gcc
 CFLAGS := -Wall -Wextra -g
 
-MAIN := nn
-OBJS := nn.o
-SRCS := nn.c
+MAIN := xor 
+OBJS := xor.o
+SRCS := xor.c
 LIBS := -lm
 
 ${MAIN}:${OBJS}
