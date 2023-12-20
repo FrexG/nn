@@ -5,6 +5,7 @@
 `nn.h` is a lightweight and easy-to-use neural network library designed to provide a PyTorch-like API for training neural networks in C.
 The library focuses on basic array/tensor operations, supporting essential functionalities such as `matrix multiplication`, `addition`, `initialization with ones or zeros`, `thresholding`, and `subtraction`. You can easily define arbitrary-length neural networks using this library.
 
+
 ## Reference
 - This repo is heavily inspired by [Tsodings' streams](https://www.youtube.com/watch?v=o7da9anmnMs&list=PLpM-Dvs8t0VZPZKggcql-MmjaBdZKeDMw&index=3).
 - 3blue1brown's [series on neural networks](https://www.youtube.com/watch?v=aircAruvnKk).
@@ -15,6 +16,7 @@ The library focuses on basic array/tensor operations, supporting essential funct
 - **Initialization:** Initialize tensors with ones, zeros or random values for convenience.
 - **Activation Functions:** Current version supports `sigmoid` and `relu` activation functions.
 - **Autograd (Backpropagation):** Implement automatic differentiation for efficient backpropagation with a pytorch like api.
+
 
 ## Getting Started
 
@@ -106,8 +108,9 @@ int main(){
 }
 }
 ```
+>| Explore the `/demos` folder for training examples on some public datasets
 ### TODO
- - [ ] Batch processing
+ - [X] Batch processing
  - [ ] Softmax activation
  - [ ] Cross-entropy optimization
 
