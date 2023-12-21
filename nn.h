@@ -59,7 +59,7 @@ void set_tensor(Tensor src, int rows, int cols, float (*val)[cols]);
 void copy_tensor(Tensor dst, Tensor src);
 void normalize_tensor(Tensor tensor);
 Tensor get_row(Tensor src, size_t row, size_t cols);
-Tensor *get_batch(Tensor x, Tensor y, size_t idx,size_t n_inputs, size_t n_outputs, size_t batch_size);
+Tensor *get_batch(Tensor x, Tensor y, size_t idx, size_t n_inputs, size_t n_outputs, size_t batch_size);
 // Tensor operation
 void matmul(Tensor dst, Tensor a, Tensor b);
 void matadd(Tensor dst, Tensor src);
@@ -171,10 +171,10 @@ Tensor get_row(Tensor src, size_t row, size_t cols)
   return ROW;
 }
 
-Tensor* get_batch(Tensor x, Tensor y, size_t idx,size_t n_inputs, size_t n_outputs, size_t batch_size)
+Tensor* get_batch(Tensor x, Tensor y, size_t idx, size_t n_inputs, size_t n_outputs, size_t batch_size)
 {
   assert(x.rows == y.rows);
-  static size_t index = 0; 
+  static size_t index = 0;
   // assert if x.rows == y.rows
   Tensor x_batch = new_tensor(batch_size, x.cols);
   Tensor y_batch = new_tensor(batch_size, y.cols);
@@ -191,10 +191,13 @@ Tensor* get_batch(Tensor x, Tensor y, size_t idx,size_t n_inputs, size_t n_outpu
   }
   index += batch_size;
   // reset when at the end
-  if (index  + idx >= x.rows)
+  if (index + idx >= x.rows)
     index = 0;
 
-  Tensor batch_tensor[] = {x_batch, y_batch};
+  Tensor* batch_tensor = calloc(2,sizeof(Tensor));
+
+  batch_tensor[0] = x_batch;
+  batch_tensor[1] = y_batch;
 
   return batch_tensor;
 }
@@ -280,14 +283,30 @@ void matdiff(Tensor dst, Tensor src)
 /*Operations*/
 float _sigmoid(float x)
 {
+  /* Element-wise sogmoid*/
   return 1 / (1 + expf(-x));
 }
 float _relu(float x)
 {
+  /* Element wise relue*/
   return x > 0 ? x : x * RELU_PARAM;
 }
 
-float activate(float val, Activation activation_type)
+float _softmax(float val, Tensor src)
+{
+  assert(src.rows == 1); // Tensor has to be one dimensional
+  float sum_exponentials = 0.;
+  for (size_t i = 0; i < src.rows; ++i)
+  {
+    for (size_t j = 0; j < src.cols; ++j)
+    {
+      sum_exponentials += expf(VALUE_AT(src, i, j));
+    }
+  }
+  return val / sum_exponentials;
+}
+
+float activate(float val, Activation activation_type, Tensor activation)
 {
   switch (activation_type)
   {
@@ -412,13 +431,14 @@ Tensor _forward(Net nn, Tensor input)
       for (size_t j = 0; j < cols; ++j)
       {
         float val = VALUE_AT(nn.activations[l + 1], i, j);
-        VALUE_AT(nn.activations[l + 1], i, j) = activate(val, nn.activation_funs[l]);
+
+        VALUE_AT(nn.activations[l + 1], i, j) = activate(val, nn.activation_funs[l], nn.activations[l + 1]);
       }
     }
   }
   return nn.activations[nn.net_size]; // last activation is output
 }
-void _backward(Net nn, Tensor target,Tensor pred)
+void _backward(Net nn, Tensor target, Tensor pred)
 {
 
   for (size_t l = 0; l <= nn.net_size; ++l)
@@ -428,8 +448,8 @@ void _backward(Net nn, Tensor target,Tensor pred)
 
   for (size_t j = 0; j < target.cols; ++j)
   {
-    //VALUE_AT(nn.grad_activations[nn.net_size], 0, j) = 2 * (VALUE_AT(nn.activations[nn.net_size], 0, j) - VALUE_AT(target, 0, j));
-    VALUE_AT(nn.grad_activations[nn.net_size], 0, j) = 2 * (VALUE_AT(pred,0,j) - VALUE_AT(target, 0, j));
+    // VALUE_AT(nn.grad_activations[nn.net_size], 0, j) = 2 * (VALUE_AT(nn.activations[nn.net_size], 0, j) - VALUE_AT(target, 0, j));
+    VALUE_AT(nn.grad_activations[nn.net_size], 0, j) = 2 * (VALUE_AT(pred, 0, j) - VALUE_AT(target, 0, j));
   }
   for (size_t l = nn.net_size; l > 0; --l)
   {
