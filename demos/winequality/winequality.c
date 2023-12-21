@@ -88,6 +88,7 @@ void validate(Tensor X, Tensor Y, Net model, size_t batch_size, size_t train_siz
     epoch_loss /= batch_size;
     free(x_batch.es);
     free(y_batch.es);
+    free(batch);
     count++;
   }
   epoch_loss /= count;
@@ -150,6 +151,7 @@ void train(Tensor X, Tensor Y, Net model, float lr, size_t batch_size, size_t ep
       zero_grad(model);
       free(x_batch.es);
       free(y_batch.es);
+      free(batch);
     }
     epoch_loss /= steps;
     float train_acc = (float)true_label_count / train_size;
