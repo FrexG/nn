@@ -5,15 +5,16 @@
 #define NN_IMPLEMENTATION
 #include "../../nn.h"
 
-#define MAX_LINE_SIZE 1024
+#define MAX_LINE_SIZE 2046 
 #define MAX_FIELD_SIZE 256
 #define NUM_SAMPLES 4898
 #define NUM_INPUTS 11
 #define NUM_OUTPUTS 1
+#define CSV_COL_SIZE (NUM_INPUTS + NUM_OUTPUTS )
 
 FILE *open_csv_file(char *filename)
 {
-  FILE *file = fopen(filename, "r");
+  FILE* file = fopen(filename, "r");
   if (!file)
   {
     // Handle error: print message, exit program etc.
@@ -22,33 +23,9 @@ FILE *open_csv_file(char *filename)
   return file;
 }
 
-char *read_line(FILE *file)
-{
-  char *buffer = malloc(MAX_LINE_SIZE * sizeof(char)); // Initial buffer size
-
-  // char *nread = fgets(buffer, MAX_LINE_SIZE, file);
-  if (fgets(buffer, MAX_LINE_SIZE, file) == NULL)
-  { // Reached end of file
-    return NULL;
-  }
-  return buffer;
-}
-
-char **tokenize_line(char *line)
-{
-  char *p = line;
-  char **tokens = malloc(MAX_LINE_SIZE * sizeof(char *)); // Define enough slots for expected columns
-  int i = 0;
-  while ((tokens[i] = strtok_r(p, ";", &p)) != NULL)
-  {
-    i++;
-  }
-  tokens[i] = NULL; // Mark end of token array
-  return tokens;
-}
-
 void validate(Tensor X, Tensor Y, Net model, size_t batch_size, size_t train_size)
 {
+  printf("==========================\n");
   printf("Starting Evaluation ... \n");
   float epoch_loss = 0.;
   size_t true_label_count = 0;
@@ -76,7 +53,7 @@ void validate(Tensor X, Tensor Y, Net model, size_t batch_size, size_t train_siz
       epoch_loss += *mse_cost.es;
 
       threshold(pred, 0.5);
-      // printf("Y_true = %f, Pred = %f\n", *y_test.es, *pred.es);
+      //printf("Y_true = %f, Pred = %f\n", *y_test.es, *pred.es);
       if (*y_test.es == *pred.es)
       {
         true_label_count++;
@@ -128,14 +105,14 @@ void train(Tensor X, Tensor Y, Net model, float lr, size_t batch_size, size_t ep
         normalize_tensor(x_train);
         // forward
         Tensor pred = _forward(model, x_train);
-        // threshold
+
         Tensor mse_cost = mse(y_train, pred);
         epoch_loss += *mse_cost.es;
         // backward
         _backward(model, y_train, pred);
 
         threshold(pred, 0.5);
-        // printf("Y_true = %f, Pred = %f\n", *y_train.es, *pred.es);
+       // printf("Y_true = %f, Pred = %f\n", *y_train.es, *pred.es);
 
         if (*y_train.es == *pred.es)
         {
@@ -157,8 +134,8 @@ void train(Tensor X, Tensor Y, Net model, float lr, size_t batch_size, size_t ep
     float train_acc = (float)true_label_count / train_size;
     printf("loss for epoch %lu = %f\n", epoch + 1, epoch_loss);
     printf("Accuracy for epoch %lu= %f\n", epoch + 1, train_acc * 100);
-    validate(X, Y, model, batch_size, train_size);
   }
+    validate(X, Y, model, batch_size, train_size);
 }
 
 int main(void)
@@ -169,30 +146,36 @@ int main(void)
   Tensor Y = new_tensor(NUM_SAMPLES, NUM_OUTPUTS);
   char file_path[] = "../../datasets/winequality.csv";
 
-  FILE *file = open_csv_file(file_path);
-  char *line;
+  FILE* file = open_csv_file(file_path);
+  char* line = (char*) calloc(MAX_LINE_SIZE,sizeof(char));
   int row = 0;
   printf("Reading CSV data and parsing to a Tensor\n");
-  while ((line = read_line(file)) != NULL)
+  //while ((line = read_line(file)) != NULL)
+  while(fgets(line,MAX_LINE_SIZE,file) != NULL && row < NUM_SAMPLES)
   {
-    char **tokens = tokenize_line(line);
-    int i = 0;
-    while (tokens[i] != NULL)
-    {
-      if (row == 0)
-        break;
-      // printf("%s", tokens[i]);
-      if (i < 11)
-        VALUE_AT(X, row, i) = strtof(tokens[i], NULL);
-      else
-        VALUE_AT(Y, row, 0) = strtof(tokens[i], NULL) >= 6 ? 1. : 0.;
-      i++;
+    if (row != 0){
+      char* token;
+      // get the first token
+      token = strtok(line,";");
+      int i = 0;
+
+      while (token != NULL)
+      {
+        //printf("Token %d = %s\n",i,token);
+        if (i < 11)
+          VALUE_AT(X, row, i) = strtof(token, NULL);
+        else
+          VALUE_AT(Y, row, 0) = strtof(token, NULL) >= 6 ? 1. : 0.;
+        i++;
+        token = strtok(NULL,";");
+      }
     }
-    // printf("\n");
     row++;
-    free(line);   // Free memory allocated for line
-    free(tokens); // Free memory allocated for tokens
   }
+  fclose(file);
+  free(line);   // Free memory allocated for line
+  //free(tokens);
+  //
   // create the neural net
   size_t arch[] = {NUM_INPUTS, 32, 16, 8, 4, 2, 1};
   Activation activations[] = {RELU, RELU, RELU, RELU, RELU, SIGMOID};
@@ -202,8 +185,8 @@ int main(void)
   float train_ratio = 0.8;
   size_t train_size = (unsigned long long)(X.rows * train_ratio);
 
-  train(X, Y, model, 1e-3, 64, 10 * 1000, train_size);
-
+  train(X, Y, model, 1e-2, 16, 1, train_size);
+  //PRINT_T(Y);
   printf("Finished Training, freeing up used memory ... \n");
   free(X.es);
   free(Y.es);
