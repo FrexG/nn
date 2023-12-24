@@ -25,9 +25,9 @@ void train(Net neural_net, Tensor x_train, Tensor y_train, size_t epochs, float 
       set_tensor(x, 1, NUM_INPUTS, temp_vals);
       VALUE_AT(y, 0, 0) = VALUE_AT(y_train, i, 0);
 
-      _forward(neural_net, x);
+      Tensor pred = _forward(neural_net, x);
       // backprop
-      _backward(neural_net, y);
+      _backward(neural_net, y, pred);
       free(y.es);
       free(x.es);
     }
@@ -93,7 +93,7 @@ int main(void)
   PRINT_T(xor_output_tensor);
 
   // start training
-  train(neural_net, xor_input_tensor, xor_output_tensor, 100 * 1000, 0.1);
+  train(neural_net, xor_input_tensor, xor_output_tensor, 1 , 0.1);
   // evaluat
   evaluate(neural_net, xor_input_tensor, xor_output_tensor);
 
