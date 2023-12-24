@@ -319,6 +319,7 @@ float activate(float val, Activation activation_type, Tensor activation)
     return val;
     break;
   }
+  return 0;
 }
 float d_act_fun(float val, Activation act_fun)
 {
